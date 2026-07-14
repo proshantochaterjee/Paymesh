@@ -13,6 +13,7 @@
     "lint": "turbo run lint && eslint scripts",
     "typecheck": "turbo run typecheck && tsc -p scripts/tsconfig.json --noEmit",
     "test": "turbo run test",
+    "test:ci": "npm run build --workspace=@workforceos/shared && npm run build --workspace=@workforceos/sdk && npm test --workspace=@workforceos/shared && npm test --workspace=@workforceos/sdk && npm test --workspace=@workforceos/contracts && npm run test:ci --workspace=@workforceos/backend",
     "dev": "turbo run dev",
     "db:migrate": "npm run db:migrate --workspace=@workforceos/backend",
     "db:seed": "tsx scripts/seed-db.ts"

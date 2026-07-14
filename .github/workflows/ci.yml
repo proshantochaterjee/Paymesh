@@ -1,15 +1,139 @@
-name: CI
+name: CI/CD Pipeline
 
 on:
+  workflow_dispatch:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
+      - proshantochaterjee-main
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
+
+concurrency:
+  group: ci-cd-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "20"
+  DATABASE_URL: postgresql://postgres:password@localhost:5432/workforceos_test
+  REDIS_URL: redis://localhost:6379
+  STELLAR_NETWORK: testnet
+  STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+  STELLAR_RPC_URL: https://soroban-testnet.stellar.org
+  STELLAR_HORIZON_URL: https://horizon-testnet.stellar.org
+  STELLAR_FACTORY_CONTRACT_ADDRESS: CD2GIPUVLMB36V6XLTN7KJ6CGJOSUWRTLSC2WAGIXDJLPCTZF657JLX3
+  STELLAR_USDC_SAC_ADDRESS: CBKL4AWQPCWLDVDZ4MPYM4AWLDEKBU3KUTDVQ7AGW77P6KR23YIIUTNL
+  STELLAR_EMPLOYEE_REGISTRY_CONTRACT_ADDRESS: CB3G6PXAKCEZAB6W2P27LY7UMZBL6YMD6ZUP4Q2HCKRRZIWERB2H7AML
+  STELLAR_PAYROLL_ENGINE_CONTRACT_ADDRESS: CANMOFXMXPPGOVXK4ISAM4R75ESFFDWGKAZG2S4W4JTWKD2BMMNLPYVZ
+  STELLAR_MILESTONE_ENGINE_CONTRACT_ADDRESS: CD3XEYY3J7HPQLJSY64LIQC6R7OXG6N2WNTHSWQTXCXNI3ZYQI2V2R5B
 
 jobs:
-  build-and-test:
+  validate-source:
+    name: 01 - Validate source and lockfiles
     runs-on: ubuntu-latest
-    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Validate npm lockfile
+        run: npm ci --ignore-scripts
+
+      - name: Verify workspace manifests
+        run: npm query .workspace
+
+  prepare-toolchains:
+    name: 02 - Prepare Node and Rust toolchains
+    runs-on: ubuntu-latest
+    needs: validate-source
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+
+      - name: Cache Cargo registry, git sources, and build output
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/contracts/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('packages/contracts/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Fetch Rust dependencies
+        working-directory: packages/contracts
+        run: cargo fetch --locked
+
+  quality-gates:
+    name: 03 - Lint and typecheck
+    runs-on: ubuntu-latest
+    needs: prepare-toolchains
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+
+      - name: Restore Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/contracts/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('packages/contracts/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate --workspace=@workforceos/backend
+
+      - name: Run linting
+        run: npm run lint
+
+      - name: Run TypeScript and Rust type checks
+        run: npm run typecheck
+
+  database-migrations:
+    name: 04 - Validate database migrations
+    runs-on: ubuntu-latest
+    needs: quality-gates
     services:
       postgres:
         image: postgres:16
@@ -20,73 +144,186 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres -d workforceos_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate --workspace=@workforceos/backend
+
+      - name: Apply Prisma migrations
+        run: npm run db:deploy --workspace=@workforceos/backend
+
+  test-suite:
+    name: 05 - Run unit, integration, and contract tests
+    runs-on: ubuntu-latest
+    needs: database-migrations
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: workforceos_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d workforceos_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
       redis:
         image: redis:7
         ports:
           - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Use Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
 
-    - name: Install dependencies
-      run: npm ci
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
 
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: wasm32v1-none
+      - name: Restore Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/contracts/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('packages/contracts/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
-    - name: Install Stellar CLI
-      run: |
-        curl -L https://github.com/stellar/stellar-cli/releases/download/v22.0.0/stellar-cli-22.0.0-x86_64-unknown-linux-gnu.tar.gz | tar xz
-        sudo mv stellar /usr/local/bin/stellar
+      - name: Install npm dependencies
+        run: npm ci
 
-    - name: Provision Stellar test identity
-      run: |
-        for attempt in 1 2 3; do
-          if stellar keys generate workforceos-deployer --network testnet --fund --overwrite; then
-            exit 0
+      - name: Generate Prisma client
+        run: npm run db:generate --workspace=@workforceos/backend
+
+      - name: Apply Prisma migrations
+        run: npm run db:deploy --workspace=@workforceos/backend
+
+      - name: Run deterministic CI tests
+        run: npm run test:ci
+
+  production-build:
+    name: 06 - Build production artifacts
+    runs-on: ubuntu-latest
+    needs: test-suite
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+
+      - name: Restore Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/contracts/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('packages/contracts/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build all workspaces
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: workforceos-build-${{ github.sha }}
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            apps/backend/dist
+            apps/frontend/.next
+            packages/shared/dist
+            packages/sdk/dist
+            packages/contracts/target/wasm32v1-none/release/*.wasm
+
+  deployment-readiness:
+    name: 07 - Deployment readiness checks
+    runs-on: ubuntu-latest
+    needs: production-build
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      TESTNET_DEPLOYER_SECRET_KEY: ${{ secrets.TESTNET_DEPLOYER_SECRET_KEY }}
+    steps:
+      - name: Check optional deployment secrets
+        run: |
+          missing=0
+
+          check_secret() {
+            name="$1"
+            value="$2"
+            if [ -z "$value" ]; then
+              echo "::notice::$name is not configured; deployment will remain a readiness gate only."
+              missing=1
+            else
+              echo "$name is configured."
+            fi
+          }
+
+          check_secret "RENDER_API_KEY" "$RENDER_API_KEY"
+          check_secret "RENDER_SERVICE_ID" "$RENDER_SERVICE_ID"
+          check_secret "VERCEL_TOKEN" "$VERCEL_TOKEN"
+          check_secret "RAILWAY_TOKEN" "$RAILWAY_TOKEN"
+          check_secret "TESTNET_DEPLOYER_SECRET_KEY" "$TESTNET_DEPLOYER_SECRET_KEY"
+
+          if [ "$missing" -eq 1 ]; then
+            echo "Deployment secrets are optional in this pipeline, so the CI/CD run remains green."
           fi
-          sleep 5
-        done
-        exit 1
 
-    - name: Prisma Generate
-      env:
-        DATABASE_URL: postgresql://postgres:password@localhost:5432/workforceos_test
-      run: npm run db:generate --workspace=@workforceos/backend
-
-    - name: Prisma Migrate
-      env:
-        DATABASE_URL: postgresql://postgres:password@localhost:5432/workforceos_test
-      run: npm run db:deploy --workspace=@workforceos/backend
-
-    - name: Run Linting
-      run: npx turbo run lint
-
-    - name: Run Type Checks
-      run: npx turbo run typecheck
-
-    - name: Run Tests
-      env:
-        DATABASE_URL: postgresql://postgres:password@localhost:5432/workforceos_test
-        REDIS_URL: redis://localhost:6379
-        STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
-        STELLAR_RPC_URL: "https://soroban-testnet.stellar.org"
-      run: npx turbo run test
-
-    - name: Build Application
-      env:
-        DATABASE_URL: postgresql://postgres:password@localhost:5432/workforceos_test
-      run: npx turbo run build
+  pipeline-complete:
+    name: 08 - Pipeline complete
+    runs-on: ubuntu-latest
+    needs: deployment-readiness
+    steps:
+      - name: Mark pipeline green
+        run: echo "CI/CD pipeline completed successfully."

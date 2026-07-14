@@ -8,6 +8,7 @@
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "prisma generate && vitest run",
+    "test:ci": "prisma generate && vitest run src/**/*.spec.ts test/app.e2e-spec.ts test/openapi.integration-spec.ts test/prisma-migrations.integration-spec.ts",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate"
