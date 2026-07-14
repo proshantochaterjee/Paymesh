@@ -52,6 +52,16 @@ jobs:
         curl -L https://github.com/stellar/stellar-cli/releases/download/v22.0.0/stellar-cli-22.0.0-x86_64-unknown-linux-gnu.tar.gz | tar xz
         sudo mv stellar /usr/local/bin/stellar
 
+    - name: Provision Stellar test identity
+      run: |
+        for attempt in 1 2 3; do
+          if stellar keys generate workforceos-deployer --network testnet --fund --overwrite; then
+            exit 0
+          fi
+          sleep 5
+        done
+        exit 1
+
     - name: Prisma Generate
       env:
         DATABASE_URL: postgresql://postgres:password@localhost:5432/workforceos_test
