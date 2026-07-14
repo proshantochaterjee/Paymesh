@@ -48,7 +48,7 @@ jobs:
         targets: wasm32v1-none
 
     - name: Install Stellar CLI
-      run: cargo install --locked stellar-cli@22.0.0
+      run: cargo install stellar-cli@22.0.0
 
     - name: Prisma Generate
       run: npx turbo run generate
