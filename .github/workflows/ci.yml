@@ -53,6 +53,8 @@ jobs:
         sudo mv stellar /usr/local/bin/stellar
 
     - name: Prisma Generate
+      env:
+        DATABASE_URL: postgresql://postgres:password@localhost:5432/workforceos_test
       run: npm run db:generate --workspace=@workforceos/backend
 
     - name: Run Linting
