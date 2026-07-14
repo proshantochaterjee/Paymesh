@@ -3,6 +3,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": ["DATABASE_URL"],
       "outputs": [
         "dist/**",
         ".next/**",
@@ -20,6 +21,7 @@
     },
     "test": {
       "dependsOn": ["^build"],
+      "env": ["DATABASE_URL", "REDIS_URL", "STELLAR_NETWORK_PASSPHRASE", "STELLAR_RPC_URL"],
       "outputs": []
     },
     "dev": {

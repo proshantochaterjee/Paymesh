@@ -57,6 +57,11 @@ jobs:
         DATABASE_URL: postgresql://postgres:password@localhost:5432/workforceos_test
       run: npm run db:generate --workspace=@workforceos/backend
 
+    - name: Prisma Migrate
+      env:
+        DATABASE_URL: postgresql://postgres:password@localhost:5432/workforceos_test
+      run: npm run db:deploy --workspace=@workforceos/backend
+
     - name: Run Linting
       run: npx turbo run lint
 
@@ -72,4 +77,6 @@ jobs:
       run: npx turbo run test
 
     - name: Build Application
+      env:
+        DATABASE_URL: postgresql://postgres:password@localhost:5432/workforceos_test
       run: npx turbo run build
