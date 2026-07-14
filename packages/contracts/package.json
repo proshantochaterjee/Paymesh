@@ -1,0 +1,11 @@
+{
+  "name": "@workforceos/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "cargo build --workspace --target wasm32v1-none --release",
+    "lint": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings",
+    "typecheck": "cargo check --workspace",
+    "test": "cargo test --workspace"
+  }
+}

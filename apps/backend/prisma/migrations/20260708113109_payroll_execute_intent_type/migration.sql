@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "IntentType" ADD VALUE 'PAYROLL_EXECUTE';

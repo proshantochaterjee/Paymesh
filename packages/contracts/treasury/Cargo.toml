@@ -1,0 +1,25 @@
+[package]
+name = "treasury"
+edition.workspace = true
+license.workspace = true
+version = "0.1.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+common = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+ed25519-dalek = { workspace = true }
+# Dev-only: treasury's own contract code never depends on the real
+# organization crate (see common::clients doc comment for why) but its
+# tests need a real deployed organization instance to grant roles against.
+organization = { workspace = true }
+
+[features]
+testutils = ["soroban-sdk/testutils"]

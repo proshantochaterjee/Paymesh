@@ -1,0 +1,25 @@
+[package]
+name = "payroll-engine"
+edition.workspace = true
+license.workspace = true
+version = "0.1.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+common = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+ed25519-dalek = { workspace = true }
+organization = { workspace = true }
+treasury = { workspace = true }
+employee-registry = { workspace = true }
+payroll-factory = { workspace = true }
+
+[features]
+testutils = ["soroban-sdk/testutils"]
