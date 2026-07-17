@@ -44,7 +44,7 @@ The `indexer` module polls Stellar RPC for contract events, filtering by relevan
 - Monorepo full suite: `npx turbo run test`
 
 ## CI/CD Pipeline
-- Handled by `.github/workflows/ci.yml` (Lint, Typecheck, Build, Test) and `deploy.yml` (Vercel & Render).
+<img width="1457" height="835" alt="Screenshot 2026-07-17 at 4 06 22 PM" src="https://github.com/user-attachments/assets/6e00f35c-7099-4628-b7ba-c35ccbae761e" />
 
 ## Demo Walkthrough
 1. Go to onboarding, connect Freighter, and create an organization.
