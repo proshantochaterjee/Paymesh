@@ -38,13 +38,22 @@ The deployed addresses are saved to `deployed-addresses.testnet.json`.
 The `indexer` module polls Stellar RPC for contract events, filtering by relevant topics, and updates `Transaction` and `Milestone` records in Postgres using idempotent processing.
 
 ## Testing Instructions
-- Contracts: `cargo test --all`
-- Backend: `npx vitest` inside `apps/backend`
-- Frontend: Next.js tests
+- Contracts: `cargo test --all` (52 tests: access control, state machines, cross-contract calls)
+- Backend: `npm run test:ci --workspace=@workforceos/backend` (19 deterministic tests: unit + e2e + OpenAPI + migrations). `npm test` also runs `treasury`/`payroll`/`milestones`/`indexer` e2e specs that submit real transactions to Stellar Testnet; these need a funded test account with an established TUSDC trustline and are excluded from `test:ci` because they fail with `op_src_no_trust` otherwise (see the CI Audit section of the production readiness report for details).
+- Frontend: `npm test --workspace=@workforceos/frontend` (Vitest + Testing Library — component tests and a full sign-and-submit state-machine integration test)
+- SDK / shared: `npm test --workspace=@workforceos/sdk`, `npm test --workspace=@workforceos/shared`
 - Monorepo full suite: `npx turbo run test`
 
+## Event Streaming (Frontend)
+Dashboards backed by indexer-materialized data (treasury balance, transactions, milestones, payroll runs) poll every 15s and refetch on window focus, so state changes made elsewhere (another signer, the indexer catching up) surface without a manual reload. React Query's default `refetchOnReconnect` handles resuming sync after a dropped connection.
+
 ## CI/CD Pipeline
-- Handled by `.github/workflows/ci.yml` (Lint, Typecheck, Build, Test) and `deploy.yml` (Vercel & Render).
+- `.github/workflows/ci.yml`: an 8-stage sequential pipeline (validate sources → prepare toolchains → lint/typecheck → migration check → full test suite → production build → deployment-readiness gate → complete), running on every push and PR.
+- `.github/workflows/deploy.yml`: Vercel (frontend) & Render (backend).
+
+## Verified Testnet Evidence
+- Deployed contracts (`deployed-addresses.testnet.json`): payroll factory `CD2GIPUVLMB36V6XLTN7KJ6CGJOSUWRTLSC2WAGIXDJLPCTZF657JLX3`, employee registry `CB3G6PXAKCEZAB6W2P27LY7UMZBL6YMD6ZUP4Q2HCKRRZIWERB2H7AML`, payroll engine `CANMOFXMXPPGOVXK4ISAM4R75ESFFDWGKAZG2S4W4JTWKD2BMMNLPYVZ`, milestone engine `CD3XEYY3J7HPQLJSY64LIQC6R7OXG6N2WNTHSWQTXCXNI3ZYQI2V2R5B`.
+- Live interaction: a freshly-funded Testnet account called `create_organization` on the deployed factory, submitting a real transaction: [`6de042f8b36a8089c5e39f6c624cf396d002957b3dd35cd74c08e18fde3df23b`](https://stellar.expert/explorer/testnet/tx/6de042f8b36a8089c5e39f6c624cf396d002957b3dd35cd74c08e18fde3df23b). It deployed a new organization + treasury contract pair (org #196) and emitted real `OrgCreated`/`RoleGranted` events, confirming the deployed contracts are live and inter-contract communication (factory → organization/treasury constructors) works end to end.
 
 ## Demo Walkthrough
 1. Go to onboarding, connect Freighter, and create an organization.
