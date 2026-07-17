@@ -72,7 +72,7 @@ export function ExecutePayrollDialog({ orgId, runId, totalAmount, disabled }: { 
   return (
     <>
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogTrigger render={<Button />}>Execute Run</DialogTrigger>
+        <DialogTrigger render={<Button disabled={disabled} />}>Execute Run</DialogTrigger>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Execute Payroll Run</DialogTitle>

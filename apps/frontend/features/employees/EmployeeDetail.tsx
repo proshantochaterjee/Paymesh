@@ -3,7 +3,7 @@
 import { useEmployee } from "./queries";
 import { UpdateSalaryDialog } from "./UpdateSalaryDialog";
 import { StatusBadge, DomainStatus } from "@/components/StatusBadge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, User, Briefcase, Mail, Wallet, Banknote } from "lucide-react";
 import { Button } from "@/components/ui/button";

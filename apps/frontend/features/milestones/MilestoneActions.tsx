@@ -1,14 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { clientFetch } from "@/lib/api/client";
 import { throwApiError } from "@/lib/api/errors";
 import { useSignAndSubmit } from "@/lib/hooks/useSignAndSubmit";
 import { Button } from "@/components/ui/button";
 
 export function FundMilestoneButton({ orgId, milestoneId, amount }: { orgId: string; milestoneId: string; amount: string }) {
-  const [loading, setLoading] = useState(false);
-
   const { start, SignAndSubmitModal } = useSignAndSubmit({
     title: "Fund Milestone",
     summaryContent: (
@@ -57,7 +54,7 @@ export function FundMilestoneButton({ orgId, milestoneId, amount }: { orgId: str
 
   return (
     <>
-      <Button onClick={() => start()} disabled={loading}>Fund Milestone</Button>
+      <Button onClick={() => start()}>Fund Milestone</Button>
       <SignAndSubmitModal />
     </>
   );
@@ -76,8 +73,6 @@ export function ActionMilestoneButton({
   label: string;
   variant?: "default" | "outline" | "destructive" | "secondary";
 }) {
-  const [loading, setLoading] = useState(false);
-
   const { start, SignAndSubmitModal } = useSignAndSubmit({
     title: `${label} Milestone`,
     summaryContent: (
@@ -125,7 +120,7 @@ export function ActionMilestoneButton({
 
   return (
     <>
-      <Button variant={variant} onClick={() => start()} disabled={loading}>{label}</Button>
+      <Button variant={variant} onClick={() => start()}>{label}</Button>
       <SignAndSubmitModal />
     </>
   );

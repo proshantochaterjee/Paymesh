@@ -4,7 +4,7 @@ import { useTreasury } from "./queries";
 import { DepositDialog } from "./DepositDialog";
 import { WithdrawDialog } from "./WithdrawDialog";
 import { TransactionTable } from "@/features/transactions/TransactionTable";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
