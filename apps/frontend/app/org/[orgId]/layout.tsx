@@ -30,7 +30,7 @@ export default async function OrgLayout({
       <Sidebar orgId={orgId} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar orgId={orgId} />
-        <main className="flex-1 overflow-y-auto p-8">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <div className="mx-auto max-w-[1440px]">
             {children}
           </div>

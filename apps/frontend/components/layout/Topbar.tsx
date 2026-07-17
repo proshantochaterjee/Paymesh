@@ -5,8 +5,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useOrganization } from "@/features/settings/queries";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { useMyRole } from "@/lib/hooks/useMyRole";
+import { useUiStore } from "@/lib/store/ui";
 import { clientFetch } from "@/lib/api/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, LogOut, User } from "lucide-react";
+import { ChevronDown, LogOut, Menu, User } from "lucide-react";
 
 export function Topbar({ orgId }: { orgId: string }) {
   const router = useRouter();
@@ -23,6 +25,7 @@ export function Topbar({ orgId }: { orgId: string }) {
   const { data: org, isLoading: isOrgLoading } = useOrganization(orgId);
   const { data: currentUser } = useCurrentUser();
   const { role } = useMyRole(orgId);
+  const setMobileNavOpen = useUiStore((state) => state.setMobileNavOpen);
 
   const handleLogout = async () => {
     await clientFetch("/auth/logout", { method: "POST" });
@@ -31,8 +34,17 @@ export function Topbar({ orgId }: { orgId: string }) {
   };
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card/40 px-6">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card/40 px-4 sm:px-6">
       <div className="flex items-center gap-2 min-w-0">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="mr-1 text-muted-foreground md:hidden"
+          onClick={() => setMobileNavOpen(true)}
+          aria-label="Open navigation"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
         {isOrgLoading ? (
           <Skeleton className="h-4 w-32" />
         ) : (
