@@ -14,6 +14,11 @@ export const useMilestones = (orgId: string) => {
       return res.json();
     },
     staleTime: 30 * 1000,
+    // Milestone status transitions are written by the indexer off of
+    // on-chain events (docs/EVENT_INDEXING.md) — poll so a status change
+    // made by another party (e.g. the org owner approving) shows up here.
+    refetchInterval: 15 * 1000,
+    refetchOnWindowFocus: true,
   });
 };
 
@@ -26,5 +31,7 @@ export const useMilestone = (orgId: string, milestoneId: string) => {
       return res.json();
     },
     staleTime: 30 * 1000,
+    refetchInterval: 15 * 1000,
+    refetchOnWindowFocus: true,
   });
 };

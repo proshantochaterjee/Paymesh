@@ -14,6 +14,11 @@ export const usePayrollRuns = (orgId: string) => {
       return res.json();
     },
     staleTime: 30 * 1000,
+    // Chunk-by-chunk execution progress is reconciled asynchronously
+    // (docs/EVENT_INDEXING.md) — poll so a run's status/progress updates
+    // without a manual reload while it's executing.
+    refetchInterval: 15 * 1000,
+    refetchOnWindowFocus: true,
   });
 };
 
@@ -26,5 +31,7 @@ export const usePayrollRun = (orgId: string, runId: string) => {
       return res.json();
     },
     staleTime: 30 * 1000,
+    refetchInterval: 15 * 1000,
+    refetchOnWindowFocus: true,
   });
 };

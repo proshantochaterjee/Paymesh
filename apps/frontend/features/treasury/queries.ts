@@ -16,5 +16,11 @@ export const useTreasury = (orgId: string) => {
       return res.json();
     },
     staleTime: 30 * 1000,
+    // Balance changes off-chain via the indexer polling Stellar RPC
+    // (docs/EVENT_INDEXING.md), not via any push from this request —
+    // short polling plus a focus refetch is how the dashboard picks up
+    // deposits/withdrawals made from elsewhere without a manual reload.
+    refetchInterval: 15 * 1000,
+    refetchOnWindowFocus: true,
   });
 };

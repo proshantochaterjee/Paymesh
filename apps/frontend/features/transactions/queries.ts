@@ -24,5 +24,10 @@ export const useTransactions = (orgId: string, filters: Record<string, string | 
       return res.json();
     },
     staleTime: 30 * 1000,
+    // Transactions are materialized asynchronously by the indexer
+    // (docs/EVENT_INDEXING.md) — poll so newly-confirmed transactions
+    // appear without a manual reload.
+    refetchInterval: 15 * 1000,
+    refetchOnWindowFocus: true,
   });
 };
