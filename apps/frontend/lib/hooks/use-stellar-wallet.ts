@@ -38,7 +38,7 @@ export function useWallet() {
             await refreshBalance(existingAddress);
           }
         }
-      } catch (err) {
+      } catch {
         // Silently ignore if we just haven't connected yet
       }
     }

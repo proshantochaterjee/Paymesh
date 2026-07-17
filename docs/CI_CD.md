@@ -1,152 +1,62 @@
 # CI/CD
 
-## 1. Workflows
+The repository uses one GitHub Actions workflow:
 
 ```
 .github/workflows/
-├── ci.yml         # every push/PR: lint, typecheck, unit+integration tests, build
-├── contracts.yml  # every push/PR touching packages/contracts: cargo fmt/clippy/test
-└── deploy.yml     # on tag/main merge: deploy contracts (if changed) + backend + frontend
+└── ci.yml  # sequential CI/CD pipeline for source validation, quality, tests, build, and deployment readiness
 ```
 
-## 2. `ci.yml` (summary)
+## Pipeline Order
 
-```yaml
-name: CI
-on: [pull_request, push]
-jobs:
-  lint-typecheck:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: npm }
-      - run: npm ci
-      - run: npx turbo run lint typecheck
+The workflow is intentionally sequential so the GitHub Actions graph shows a full pipeline instead of one basic all-in-one job:
 
-  backend-tests:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env: { POSTGRES_PASSWORD: test, POSTGRES_DB: test }
-        ports: ["5432:5432"]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: npm }
-      - run: npm ci
-      - run: npx turbo run test --filter=backend
-        env: { DATABASE_URL: postgresql://postgres:test@localhost:5432/test }
+1. `01 - Validate source and lockfiles`
+2. `02 - Prepare Node and Rust toolchains`
+3. `03 - Lint and typecheck`
+4. `04 - Validate database migrations`
+5. `05 - Run unit, integration, and contract tests`
+6. `06 - Build production artifacts`
+7. `07 - Deployment readiness checks`
+8. `08 - Pipeline complete`
 
-  frontend-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: npm }
-      - run: npm ci
-      - run: npx turbo run test --filter=frontend
+## Runtime Requirements
 
-  build:
-    needs: [lint-typecheck, backend-tests, frontend-tests]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: npm }
-      - run: npm ci
-      - run: npx turbo run build
+The test and migration stages provision the services required by the app:
 
-  e2e:
-    needs: [build]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: docker compose -f docker-compose.test.yml up -d --build
-      - run: npx playwright test
-      - run: docker compose -f docker-compose.test.yml down
+- PostgreSQL 16 with `workforceos_test`
+- Redis 7 for BullMQ-backed backend tests
+- Node.js 20 with `npm ci`
+- Rust stable with the `wasm32v1-none` target for Soroban contract builds
+
+The backend test setup uses the same database URL as CI:
+
+```text
+postgresql://postgres:password@localhost:5432/workforceos_test
 ```
 
-## 3. `contracts.yml` (summary)
+## Test Strategy
 
-```yaml
-name: Contracts
-on:
-  pull_request:
-    paths: ["packages/contracts/**"]
-  push:
-    paths: ["packages/contracts/**"]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with: { targets: wasm32v1-none }
-      - run: cargo fmt --manifest-path packages/contracts/Cargo.toml -- --check
-      - run: cargo clippy --manifest-path packages/contracts/Cargo.toml --all-targets -- -D warnings
-      - run: cargo build --manifest-path packages/contracts/Cargo.toml --target wasm32v1-none --release
-      - run: cargo test --manifest-path packages/contracts/Cargo.toml
-```
+The default CI test command is `npm run test:ci`. It runs deterministic checks that can pass from a clean GitHub-hosted runner:
 
-Build runs before test: `payroll_factory`'s own test suite imports `organization`/`treasury`'s compiled WASM via `soroban_sdk::contractimport!` to exercise `create_organization`'s real cross-contract deploy (Soroban has no way to deploy a contract in tests without real bytecode), so that WASM must already exist on disk before `cargo test` runs.
+- shared package tests
+- SDK package tests
+- Rust contract tests
+- backend unit tests
+- backend local integration tests for the app, OpenAPI contract, and Prisma migrations
 
-## 4. `deploy.yml` (summary)
+Live Stellar Testnet end-to-end specs are intentionally excluded from the default CI gate. Those tests require the real `workforceos-deployer` secret key that matches `deployed-addresses.testnet.json`'s TUSDC issuer. Creating a new throwaway Stellar identity in CI is not valid for those specs because the generated account is not the deployed issuer and cannot satisfy the required TUSDC trustline/payment flow.
 
-Triggered on merge to `main` (frontend/backend auto-deploy) and on
-version tags matching `contracts-v*` (contract redeploy, manual/deliberate
-since contract deploys are rare and consequential):
+## Deployment Readiness
 
-```yaml
-name: Deploy
-on:
-  push:
-    branches: [main]
-    tags: ["contracts-v*"]
-jobs:
-  deploy-contracts:
-    if: startsWith(github.ref, 'refs/tags/contracts-v')
-    runs-on: ubuntu-latest
-    environment: testnet
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with: { targets: wasm32v1-none }
-      - run: ./scripts/deploy-contracts.sh
-        env:
-          STELLAR_NETWORK: testnet
-          DEPLOYER_SECRET_KEY: ${{ secrets.TESTNET_DEPLOYER_SECRET_KEY }}
+The final deployment-readiness job is non-destructive. It verifies whether optional deployment secrets are configured, but it does not deploy automatically. This keeps the pipeline green on pull requests and normal pushes while still showing the deployment stage in the Actions graph.
 
-  deploy-backend:
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: railway up --service backend
-        env: { RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }} }
+Optional secrets checked:
 
-  deploy-frontend:
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
-```
+- `RENDER_API_KEY`
+- `RENDER_SERVICE_ID`
+- `VERCEL_TOKEN`
+- `RAILWAY_TOKEN`
+- `TESTNET_DEPLOYER_SECRET_KEY`
 
-## 5. Branch protection
-
-`main` requires: `ci.yml` passing (all jobs), at least one review approval,
-up-to-date branch before merge. Contract changes additionally require the
-PR author to check off the [SMART_CONTRACT_SPECIFICATION.md](./SMART_CONTRACT_SPECIFICATION.md)
-per-contract testing-strategy checklist in the PR description (enforced by
-review, not tooling, for MVP).
-
-## 6. Secrets inventory used by CI
-
-`TESTNET_DEPLOYER_SECRET_KEY`, `RAILWAY_TOKEN`, `VERCEL_TOKEN`,
-`DATABASE_URL` (staging, for migration-check jobs if added later) — all
-stored as encrypted GitHub Actions secrets, scoped to the `testnet`
-deployment environment with required-reviewer protection on that
-environment for the contract-deploy job specifically, since it's the
-highest-consequence pipeline step.
+Add real deployment commands behind protected environments once the target infrastructure is finalized.
