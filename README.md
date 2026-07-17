@@ -49,7 +49,7 @@ Dashboards backed by indexer-materialized data (treasury balance, transactions, 
 
 ## CI/CD Pipeline
 - `.github/workflows/ci.yml`: an 8-stage sequential pipeline (validate sources → prepare toolchains → lint/typecheck → migration check → full test suite → production build → deployment-readiness gate → complete), running on every push and PR.
-- `.github/workflows/deploy.yml`: Vercel (frontend) & Render (backend).
+- `.github/workflows/deploy.yml`: Vercel (frontend) & Railway (backend), gated behind optional repo secrets (`VERCEL_TOKEN`/`VERCEL_ORG_ID`/`VERCEL_PROJECT_ID`, `RAILWAY_TOKEN`/`RAILWAY_BACKEND_SERVICE_ID`) plus Testnet contract deployment (`TESTNET_DEPLOYER_SECRET_KEY`) — each job checks for its own secrets and skips cleanly (not a failure) when unconfigured, since this repo doesn't have live Vercel/Railway projects wired up yet.
 
 ## Verified Testnet Evidence
 - Deployed contracts (`deployed-addresses.testnet.json`): payroll factory `CD2GIPUVLMB36V6XLTN7KJ6CGJOSUWRTLSC2WAGIXDJLPCTZF657JLX3`, employee registry `CB3G6PXAKCEZAB6W2P27LY7UMZBL6YMD6ZUP4Q2HCKRRZIWERB2H7AML`, payroll engine `CANMOFXMXPPGOVXK4ISAM4R75ESFFDWGKAZG2S4W4JTWKD2BMMNLPYVZ`, milestone engine `CD3XEYY3J7HPQLJSY64LIQC6R7OXG6N2WNTHSWQTXCXNI3ZYQI2V2R5B`.

@@ -1,0 +1,143 @@
+name: Deploy
+
+# Runs after CI is green on main, or manually via workflow_dispatch.
+# Every job here is secret-gated and no-ops cleanly when the relevant
+# secret isn't configured — same "readiness gate, not a hard
+# requirement" philosophy as ci.yml's deployment-readiness job, since
+# provisioning real Testnet/Vercel/Railway resources needs credentials
+# this repo may not have configured yet (see docs/DEPLOYMENT_GUIDE.md).
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["CI/CD Pipeline"]
+    branches: [main]
+    types:
+      - completed
+
+concurrency:
+  group: deploy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  deploy-contracts:
+    name: Deploy contracts to Stellar Testnet
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    env:
+      TESTNET_DEPLOYER_SECRET_KEY: ${{ secrets.TESTNET_DEPLOYER_SECRET_KEY }}
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - name: Check for deployer secret
+        id: check
+        run: |
+          if [ -z "$TESTNET_DEPLOYER_SECRET_KEY" ]; then
+            echo "::notice::TESTNET_DEPLOYER_SECRET_KEY is not configured — skipping contract deployment. See docs/DEPLOYMENT_GUIDE.md."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout repository
+        if: steps.check.outputs.configured == 'true'
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        if: steps.check.outputs.configured == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+
+      - name: Install Stellar CLI
+        if: steps.check.outputs.configured == 'true'
+        run: cargo install --locked stellar-cli --features opt
+
+      - name: Import deployer identity
+        if: steps.check.outputs.configured == 'true'
+        run: |
+          stellar keys add workforceos-deployer --secret-key <<< "$TESTNET_DEPLOYER_SECRET_KEY"
+
+      - name: Run deploy-contracts.sh
+        if: steps.check.outputs.configured == 'true'
+        env:
+          STELLAR_DEPLOYER_IDENTITY: workforceos-deployer
+        run: ./scripts/deploy-contracts.sh
+        # Idempotent by design (scripts/deploy-contracts.sh): a no-op,
+        # zero-exit-code skip when deployed-addresses.testnet.json
+        # already exists, so re-runs on every main push are safe and
+        # this step never accidentally redeploys over a live org's
+        # contract set. Pass --force manually via workflow_dispatch
+        # inputs if a genuine redeploy is ever needed.
+
+  deploy-backend:
+    name: Deploy backend to Railway
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_SERVICE: ${{ secrets.RAILWAY_BACKEND_SERVICE_ID }}
+    steps:
+      - name: Check for Railway credentials
+        id: check
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ] || [ -z "$RAILWAY_SERVICE" ]; then
+            echo "::notice::RAILWAY_TOKEN/RAILWAY_BACKEND_SERVICE_ID not configured — skipping backend deploy. See docs/DEPLOYMENT_GUIDE.md §4."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout repository
+        if: steps.check.outputs.configured == 'true'
+        uses: actions/checkout@v4
+
+      - name: Deploy via Railway CLI
+        if: steps.check.outputs.configured == 'true'
+        run: |
+          npm install -g @railway/cli
+          railway up --service "$RAILWAY_SERVICE" --detach
+
+  deploy-frontend:
+    name: Deploy frontend to Vercel
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Check for Vercel credentials
+        id: check
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "::notice::VERCEL_TOKEN/VERCEL_ORG_ID/VERCEL_PROJECT_ID not configured — skipping frontend deploy. See docs/DEPLOYMENT_GUIDE.md §5."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout repository
+        if: steps.check.outputs.configured == 'true'
+        uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        if: steps.check.outputs.configured == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Deploy via Vercel CLI
+        if: steps.check.outputs.configured == 'true'
+        working-directory: apps/frontend
+        run: |
+          npm install -g vercel
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          vercel build --prod --token="$VERCEL_TOKEN"
+          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
