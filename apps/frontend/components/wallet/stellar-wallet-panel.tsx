@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { detectFreighter, connectWallet, signTx } from "@/lib/stellar-wallet";
+// Imported directly per Level 1 spec, even though `useWallet` wraps these calls internally.
+import { detectFreighter, connectWallet, signTx } from "@/lib/stellar-wallet"; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { useWallet } from "@/lib/hooks/use-stellar-wallet";
 
 export function StellarWalletPanel() {
@@ -38,7 +39,7 @@ export function StellarWalletPanel() {
       setTxHash(result.hash);
       setDestination("");
       setAmount("");
-    } catch (err) {
+    } catch {
       // Error is handled by the hook and displayed below
     }
   };
